@@ -5,15 +5,18 @@ from pathlib import Path
 import zipfile
 
 
+def pair_members(scene, i):
+    for kind, frame, ext in (("final", i, "png"), ("final", i + 1, "png"),
+                             ("flow", i, "flo"), ("invalid", i, "png"),
+                             ("occlusions", i, "png")):
+        yield f"training/{kind}/{scene}/frame_{frame:04d}.{ext}"
+
+
 def members():
     names = set()
     for line in Path(__file__).with_name("pairs.tsv").read_text().splitlines():
         _, scene, index = line.split()
-        i = int(index)
-        for kind, frame, ext in (("final", i, "png"), ("final", i + 1, "png"),
-                                 ("flow", i, "flo"), ("invalid", i, "png"),
-                                 ("occlusions", i, "png")):
-            names.add(f"training/{kind}/{scene}/frame_{frame:04d}.{ext}")
+        names.update(pair_members(scene, int(index)))
     return sorted(names)
 
 

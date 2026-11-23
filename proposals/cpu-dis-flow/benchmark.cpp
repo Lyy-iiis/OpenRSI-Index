@@ -114,7 +114,9 @@ int main(int argc, char** argv) try {
         throw std::invalid_argument("expected allocation mode");
     const std::string split = argv[3];
     const int repeats = std::stoi(argv[4]);
-    if ((split != "dev" && split != "holdout" && !(allocation && split == "middlebury")) || repeats < 3 || repeats % 2 == 0)
+    const bool formal = split == "work" || split == "validation" || split == "test";
+    const bool known = split == "dev" || split == "holdout" || (allocation && (formal || split == "middlebury"));
+    if (!known || repeats < 3 || repeats % 2 == 0)
         throw std::invalid_argument("invalid split or repeat count (expected an odd number >= 3)");
     std::ifstream manifest(argv[2]);
     if (!manifest) throw std::runtime_error("cannot open pair manifest");

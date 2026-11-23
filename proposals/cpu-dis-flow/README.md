@@ -73,6 +73,26 @@ On the measured host the Homebrew shared video module had an unresolved optional
 
 A concrete next research task is to design a refinement selector that improves on the frozen residual gate on new scene families. Keep FAST, the four neighboring motion hypotheses and the patch update fixed. Give the selector the same per-pair quota and a CPU latency cap of 1.10× FAST. Competing hypotheses include motion discontinuity, local texture ambiguity and forward-warp residual. Charge the selector for its own computations; expose validation EPE, boundary EPE and latency after each iteration. Judge the final candidate on separately held-back scenes. The two public pilot data sets provide baselines for development and replication. The initial reference and candidate are in [flow.cpp](flow.cpp); [benchmark.cpp](benchmark.cpp) supplies the evaluator for this pilot. A future judged run should compare against both the FAST reference and this pilot candidate. The formal proposal would also require a contributor-confirmed project background, a separately provisioned final split, and independent packaging and validation. The repository commit contains the proposal evidence and local benchmark.
 
+## Formal split for OpenRSI #390
+
+Each scene supplies the 49 adjacent frame pairs from 1→2 through 49→50. For every pair the scorer requires both Final images and the starting frame's forward flow, invalid mask and occlusion mask.
+
+| Split | Sintel training sequences | Distinct pairs | Distinct required ZIP members |
+| --- | --- | ---: | ---: |
+| Work | alley_1, ambush_5, bamboo_1, market_2, shaman_2 | 245 | 985 |
+| Validation | bandage_2, cave_4 | 98 | 394 |
+| Final test | sleeping_1, temple_3 | 98 | 394 |
+
+[Formal pairs](formal-pairs.tsv) is a headerless input to the benchmark with columns for split, scene and starting frame. The [member inventory](formal-members.tsv) records each required path, uncompressed length and CRC32 from the official ZIP directory. Adjacent pairs share an endpoint. Per scene this gives 50 Final images and 49 files of each of the three annotation types. Mask 50 is unused because frame 50 has no outgoing evaluated pair.
+
+On an authorized installation, verify the full ZIP before provisioning. The command checks both pinned manifests, reads all 1,773 required members and verifies their CRCs. For a directory-only inventory audit, add `--directory-only`.
+
+```sh
+python3 verify_formal.py /path/to/MPI-Sintel-complete.zip
+```
+
+Run the allocation baseline with `formal-pairs.tsv` and the split argument `work`, `validation` or `test`. If any required pair is unavailable or excluded, stop provisioning without a score. Restore the exact inputs and repeat verification before restarting. The split, denominator and scene weights remain fixed. Existing pilot measurements use the separate pilot manifest.
+
 ## References
 
 - Till Kroeger, Radu Timofte, Dengxin Dai and Luc Van Gool. *Fast Optical Flow Using Dense Inverse Search*. ECCV 2016. [Paper](https://arxiv.org/abs/1603.03590)
