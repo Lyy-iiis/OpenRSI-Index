@@ -34,7 +34,9 @@ int patchCost(const cv::Mat& first, const cv::Mat& second, cv::Point a, cv::Poin
 
 // Reuse a nearby motion hypothesis if it explains a five-point patch better.
 // Read every proposal from the original flow, then apply the corrections once.
-void refine(const cv::Mat& first, const cv::Mat& second, cv::Mat& flow, bool gated) {
+RefinementSites refine(const cv::Mat& first, const cv::Mat& second, cv::Mat& flow,
+                       bool gated, const std::vector<uint8_t>* selection) {
+    RefinementSites sites;
     const cv::Rect validTarget(patchRadius, patchRadius,
                                second.cols - 2 * patchRadius, second.rows - 2 * patchRadius);
     cv::Mat correction((first.rows + gridStep - 1) / gridStep,
@@ -46,7 +48,13 @@ void refine(const cv::Mat& first, const cv::Mat& second, cv::Mat& flow, bool gat
             const auto current = flow.at<cv::Vec2f>(source);
             const auto target = warp(source, current);
             if (!validTarget.contains(target)) continue;
-            if (gated && intensityError(first, second, source, target) < residualThreshold) continue;
+            const size_t index = sites.eligible++;
+            if (selection) {
+                if (!selection->at(index)) continue;
+            } else if (gated && intensityError(first, second, source, target) < residualThreshold) {
+                continue;
+            }
+            ++sites.checked;
 
             int bestCost = patchCost(first, second, source, target) - minimumCostGain;
             cv::Vec2f delta(0, 0);
@@ -66,6 +74,7 @@ void refine(const cv::Mat& first, const cv::Mat& second, cv::Mat& flow, bool gat
     cv::Mat dense;
     cv::resize(correction, dense, {}, gridStep, gridStep, cv::INTER_LINEAR);
     flow += dense(cv::Rect(0, 0, flow.cols, flow.rows));
+    return sites;
 }
 }
 
@@ -80,10 +89,11 @@ FlowEstimator::FlowEstimator(const std::string& method) : method_(method) {
         dis_->setVariationalRefinementIterations(dis_->getVariationalRefinementIterations() + 1);
 }
 
-cv::Mat FlowEstimator::run(const cv::Mat& first, const cv::Mat& second) {
+cv::Mat FlowEstimator::run(const cv::Mat& first, const cv::Mat& second,
+                           const std::vector<uint8_t>* selection) {
     cv::Mat flow;
     dis_->calc(first, second, flow);
     if (method_ == "adaptive" || method_ == "full-grid")
-        refine(first, second, flow, method_ == "adaptive");
+        sites_ = refine(first, second, flow, method_ == "adaptive", selection);
     return flow;
 }

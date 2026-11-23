@@ -56,6 +56,35 @@ def test(binary, root):
     assert subprocess.run(args, capture_output=True).returncode != 0
 
 
+def test_middlebury(binary, root):
+    width, height = 128, 96
+    images = root / "other-data" / "scene"
+    labels = root / "other-gt-flow" / "scene"
+    images.mkdir(parents=True)
+    labels.mkdir(parents=True)
+    for index in (10, 11):
+        png(images / f"frame{index}.png", width, height,
+            lambda x, y: (17 * x + 13 * y + (45 if index == 11 and x > 64 else 0)) % 256)
+    # Each component can independently mark a missing vector.
+    samples = b"".join(struct.pack("<ff", 1e10 if x == 0 else 3, -1e10 if x == 1 else 4)
+                       for y in range(height) for x in range(width))
+    (labels / "flow10.flo").write_bytes(struct.pack("<fii", 202021.25, width, height) + samples)
+    manifest = root / "middlebury.tsv"
+    manifest.write_text("middlebury\tscene\t10\n")
+    args = [binary, str(root), str(manifest), "middlebury", "3", "allocation"]
+    result = subprocess.run(args, check=True, capture_output=True, text=True)
+    rows = {r["method"]: r for r in csv.DictReader(io.StringIO(result.stdout))}
+    assert set(rows) == {"fast", "adaptive", "random-17", "random-29", "random-43"}
+    assert 0 < int(rows["adaptive"]["checked"]) < int(rows["adaptive"]["eligible"])
+    for method, row in rows.items():
+        assert int(row["n"]) == (width - 2) * height
+        assert int(row["occ_n"]) == int(row["boundary_n"]) == 0
+        if method != "fast":
+            for field in ("eligible", "checked"):
+                assert row[field] == rows["adaptive"][field]
+
+
 if __name__ == "__main__":
     with tempfile.TemporaryDirectory() as folder:
         test(sys.argv[1], Path(folder))
+        test_middlebury(sys.argv[1], Path(folder))

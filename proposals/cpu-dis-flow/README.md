@@ -1,6 +1,19 @@
 # Adaptive CPU optical flow under a tail-latency budget
 
-This OpenRSI task proposal studies how to spend a small amount of CPU time correcting dense optical flow. On 40 held-out Sintel Final pairs, a residual-gated correction reduced mean endpoint error from 4.4663 to 4.4377 pixels. Error decreased in all five held-out scenes. P95 inference time increased by 7.5% on the first run and 7.4% on the repeat. The pilot used one CPU thread and zero GPUs.
+Where should a CPU optical-flow algorithm spend its last few milliseconds? We compare refinement at high-residual pixels with refinement at the same number of randomly chosen locations. The residual selector lowers endpoint error (EPE, in pixels) on two datasets. Its absolute gains are small and consistent across the sampled scenes. All measurements use one CPU thread and zero GPUs.
+
+## Location selection and transfer
+
+| Evaluation set | FAST EPE | Random EPE¹ | Residual EPE | Grid sites checked² | Residual vs FAST, P95 |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Sintel Final, five held-out scenes / 40 pairs | 4.46632 | 4.45886 | 4.43773 | 9.37% | +6.8% |
+| Middlebury, eight scenes / eight pairs | 0.81117 | 0.80736 | 0.80077 | 16.40% | +9.4%, +8.8% on repeat |
+
+¹ Mean EPE across three fixed random seeds. ² The random and residual methods check exactly the same number of eligible centers **on every pair**. Random masks are supplied before timing. On Sintel, residual P95 was 5.868 ms and the random controls ranged from 5.852 to 5.885 ms. On Middlebury these were 3.729 ms and 3.697–3.855 ms on the first run. [Paired experiment protocol](allocation.md)
+
+On Sintel, the random control recovered about one quarter of the residual method’s improvement over FAST. On Middlebury it recovered about one third. Comparing the two allocations accounts for the remaining 74% and 63% of the measured gain, respectively. The comparison tests the value of these selected locations under this particular patch correction. It leaves open whether a stronger confidence estimate can do better.
+
+The candidate was frozen using Sintel development scenes. It beat both FAST and the three-seed random mean in each of the eight Middlebury scenes. Excluding RubberWhale, which was used for an early FAST timing probe, pooled EPE was 0.85685 for FAST, 0.85263 for random and 0.84557 for residual selection. Middlebury provides one labeled pair per scene here, so the P95 is the slowest of eight pair medians. Timing comes from one Apple M4 Max. [Scene-level measurements](results/middlebury.csv) · [Middlebury benchmark](https://vision.middlebury.edu/flow/data/)
 
 ## Experiment
 
@@ -25,7 +38,7 @@ Requirements are CMake 3.20+, a C++17 compiler, Python 3.8+ (standard library) a
 Run these commands from this directory. To inspect the committed measurements without compiling or downloading data:
 
 ```sh
-python3 summarize.py results/dev.csv results/holdout.csv results/holdout-repeat.csv
+python3 summarize.py results/*.csv
 ```
 
 Download the official complete dataset for your research use. The preparation command extracts and fingerprints only the 360 files named by the pilot. If the archive is already extracted, omit the archive option. Keep dataset files outside the checkout. See the [Sintel downloads](https://sintel.is.tuebingen.mpg.de/downloads) and [dataset terms](https://sintel.is.tuebingen.mpg.de/license).
@@ -41,11 +54,24 @@ build/flow_bench /path/to/sintel pairs.tsv holdout 9 > build/holdout-repeat.csv
 python3 summarize.py build/dev.csv build/holdout.csv build/holdout-repeat.csv
 ```
 
+To reproduce the paired controls, download the Middlebury color two-frame and flow archives listed in [the dataset index](https://vision.middlebury.edu/flow/data/). With both ZIP files in the working directory, verify them and extract both into the same dataset root. The benchmark reads the native `other-data` and `other-gt-flow` directories. Images with no public flow labels are excluded by the manifest.
+
+```sh
+shasum -a 256 -c middlebury.sha256
+unzip -q other-color-twoframes.zip -d /path/to/middlebury
+unzip -q other-gt-flow.zip -d /path/to/middlebury
+build/flow_bench /path/to/sintel pairs.tsv dev 9 allocation > build/allocation-dev.csv
+build/flow_bench /path/to/sintel pairs.tsv holdout 9 allocation > build/allocation-holdout.csv
+build/flow_bench /path/to/middlebury middlebury.tsv middlebury 9 allocation > build/middlebury.csv
+build/flow_bench /path/to/middlebury middlebury.tsv middlebury 9 allocation > build/middlebury-repeat.csv
+python3 summarize.py build/allocation-*.csv build/middlebury*.csv
+```
+
 On the measured host the Homebrew shared video module had an unresolved optional DNN dependency. The build used the matching static video archive. To reproduce that link configuration, add `-DDIS_VIDEO_LIBRARY=/opt/homebrew/opt/opencv/lib/libopencv_video.a` to the CMake configure command. Leave the machine idle during timing. The synthetic CTest checks all five methods against known pixel counts and error sums, including invalid pixels, the occlusion mask and the boundary band.
 
 ## OpenRSI scope
 
-A research agent could change how uncertainty is estimated, which alternative motions are proposed and how corrections are interpolated under the same single-thread budget. The initial reference and candidate are in [flow.cpp](flow.cpp); [benchmark.cpp](benchmark.cpp) supplies the evaluator for this pilot. A future judged run should compare against both the FAST reference and this pilot candidate. The formal proposal would also require a contributor-confirmed project background, a separately provisioned final split, and independent packaging and validation. The repository commit contains the proposal evidence and local benchmark.
+A concrete next research task is to design a refinement selector that improves on the frozen residual gate on new scene families. Keep FAST, the four neighboring motion hypotheses and the patch update fixed. Give the selector the same per-pair quota and a CPU latency cap of 1.10× FAST. Competing hypotheses include motion discontinuity, local texture ambiguity and forward-warp residual. Charge the selector for its own computations; expose validation EPE, boundary EPE and latency after each iteration. Judge the final candidate on separately held-back scenes. The two public pilot data sets provide baselines for development and replication. The initial reference and candidate are in [flow.cpp](flow.cpp); [benchmark.cpp](benchmark.cpp) supplies the evaluator for this pilot. A future judged run should compare against both the FAST reference and this pilot candidate. The formal proposal would also require a contributor-confirmed project background, a separately provisioned final split, and independent packaging and validation. The repository commit contains the proposal evidence and local benchmark.
 
 ## References
 
