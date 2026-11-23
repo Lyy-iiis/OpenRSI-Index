@@ -20,17 +20,17 @@ def adjust(probability, offset):
 def batches(root, split):
     table = np.asarray(json.loads((HERE / "model.json").read_text())["fb_photo"])
     for scene, start in examples(HERE, split):
-        cycle, photo, labels, spread = observations(root, scene, start, with_disagreement=True)
+        cycle, photo, labels, spread, speed = observations(root, scene, start, with_disagreement=True)
         ref = table[cycle, photo]
         keep = cohort(ref)
-        yield scene, start, len(ref), labels[keep], ref[keep], np.digitize(spread[keep], SPREAD_EDGES)
+        yield scene, start, len(ref), labels[keep], ref[keep], np.digitize(spread[keep], SPREAD_EDGES), speed[keep]
 
 
 def fit(root):
     # Count by scene and baseline probability to optimize the scene-macro Work objective.
     counts = defaultdict(lambda: [0, 0])
     scene_sizes = defaultdict(int)
-    for scene, _, _, labels, ref, bins in batches(root, "dev"):
+    for scene, _, _, labels, ref, bins, _ in batches(root, "dev"):
         scene_sizes[scene] += len(ref)
         for b in np.unique(bins):
             for p in np.unique(ref[bins == b]):
@@ -51,7 +51,7 @@ def fit(root):
 
 def score(root, split, offsets):
     rows = []
-    for scene, start, total, labels, ref, bins in batches(root, split):
+    for scene, start, total, labels, ref, bins, _ in batches(root, split):
         methods = (("constant-half", np.full(len(ref), 0.5)), ("cycle+appearance", ref),
                    ("motion-offset", adjust(ref, np.asarray(offsets)[bins])))
         for method, p in methods:

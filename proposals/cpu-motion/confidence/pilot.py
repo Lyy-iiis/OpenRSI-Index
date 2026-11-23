@@ -29,7 +29,7 @@ def observations(root, scene, start, *, with_disagreement=False):
         for dy, dx in ((0, 4), (0, -4), (4, 0), (-4, 0)):
             neighbor = padded[4+dy:4+dy+h, 4+dx:4+dx+w]
             spread = np.maximum(spread, np.abs(neighbor-flow).sum(axis=2))
-        signals.append(spread)
+        signals.extend((spread, np.linalg.norm(flow, axis=2)))
     return tuple(v[::4, ::4][valid] for v in signals)
 
 
