@@ -12,7 +12,7 @@ FB_EDGES = [0.25, 0.5, 1, 2, 4, 8, 16, 32]
 PHOTO_EDGES = [2, 4, 8, 16, 32, 64]
 
 
-def observations(root, scene, start):
+def observations(root, scene, start, *, with_disagreement=False):
     a, b = (read(root, scene, "final", k) for k in (start, start+1))
     flow, back = dis_pair(a, b)
     fb, x, y = consistency(flow, back)
@@ -21,8 +21,16 @@ def observations(root, scene, start):
     truth = read(root, scene, "flow", start)
     valid = read(root, scene, "invalid", start)[::4, ::4] == 0
     bad = np.linalg.norm(flow - truth, axis=2) > 3
-    return tuple(v[::4, ::4][valid] for v in (np.digitize(fb, FB_EDGES),
-                 np.digitize(residual, PHOTO_EDGES), bad))
+    signals = [np.digitize(fb, FB_EDGES), np.digitize(residual, PHOTO_EDGES), bad]
+    if with_disagreement:
+        h, w = flow.shape[:2]
+        padded = np.pad(flow, ((4, 4), (4, 4), (0, 0)), mode="edge")
+        spread = np.zeros((h, w), dtype=flow.dtype)
+        for dy, dx in ((0, 4), (0, -4), (4, 0), (-4, 0)):
+            neighbor = padded[4+dy:4+dy+h, 4+dx:4+dx+w]
+            spread = np.maximum(spread, np.abs(neighbor-flow).sum(axis=2))
+        signals.append(spread)
+    return tuple(v[::4, ::4][valid] for v in signals)
 
 
 def fit(root):

@@ -8,3 +8,9 @@ shift = zero.copy()
 shift[...,0] = 1
 fb,_,_ = consistency(shift,-shift)
 assert np.all(fb[:,:-1]==0) and np.all(np.isinf(fb[:,-1]))
+
+from ambiguity import adjust, cohort
+probs = np.array([0.249999, 0.25, 0.5, 0.75, 0.750001])
+assert cohort(probs).tolist() == [False, True, True, True, False]
+assert np.allclose(adjust(probs, 0), probs)
+assert np.all(adjust(probs, 1) > probs)

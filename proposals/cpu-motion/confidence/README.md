@@ -1,10 +1,8 @@
 # Calibrated Failure Probabilities for Frozen CPU Optical Flow
 
-[Formal OpenRSI proposal](proposal.md) · [Experimental results](pilot.csv) · [Exact scored examples](manifest.tsv)
+[Formal OpenRSI proposal](proposal.md) · [Experimental results](ambiguity-pilot.csv) · [Exact scored examples](manifest.tsv)
 
-A flow estimate and a probability that it is wrong are different outputs. This task freezes every motion vector and asks whether an agent can estimate the probability of a greater-than-three-pixel error on a new scene. Downstream consumers can then use probabilities for decisions at different operating points.
-
-Upstream tests the released flow estimator, without reporting Brier score for this derived task. Our five-scene pilot has scene-mean Brier 0.1359284 for constant prevalence, 0.0620296 for cycle only and **0.0587952** for cycle+appearance. The two-signal model improved on cycle-only in all five pilot scenes. The formal task must beat the stronger two-signal model.
+The revised task scores the samples where the frozen cycle-and-appearance lookup gives a failure probability in [0.25, 0.75]. On these samples a third cue, local motion spread, reduced scene-macro Brier from 0.2091978 to 0.1520691 on the five-scene public pilot. The formal target is to improve on this three-cue reference in each final scene. The cohort is fixed before labels and candidate scores are read. The [pilot CSV](ambiguity-pilot.csv) contains eligible counts, failure counts and loss sums for each frame and method. Original all-grid results remain available in [pilot.csv](pilot.csv).
 
 ## Reproduction
 
@@ -14,8 +12,8 @@ From the parent `proposals/cpu-motion` directory, use Python 3.13. Obtain the of
 python -m pip install -r requirements.txt
 python inventory.py /path/to/MPI-Sintel-complete.zip confidence --extract /path/to/sintel
 python confidence/check.py
-python confidence/pilot.py /path/to/sintel dev dev-out.csv
-python confidence/pilot.py /path/to/sintel pilot pilot-out.csv
+python confidence/ambiguity.py /path/to/sintel dev dev-out.csv
+python confidence/ambiguity.py /path/to/sintel pilot pilot-out.csv
 python report.py dev-out.csv pilot-out.csv
 ```
 
